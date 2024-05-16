@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Utility Consumption Calculator</title>
+<style>
+  #generateBtn, #exportBtn {
+    padding: 10px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-right: 10px;
+  }
+
+  #generateBtn {
+    background-color: #4CAF50; /* Green */
+    color: white;
+  }
+
+  #exportBtn {
+    background-color: #008CBA; /* Blue */
+    color: white;
+  }
+</style>
+</head>
+<body>
+  <h2>Utility Consumption Calculator</h2>
+  <form id="utilityForm">
+    <label for="utility">Utility:</label>
+    <select id="utility" name="utility">
+      <option value="electricity">Electricity</option>
+      <option value="gas">Gas</option>
+    </select><br><br>
+    
+    <label for="startDate">Start Date:</label>
+    <input type="month" id="startDate" name="startDate"><br><br>
+
+    <label for="endDate">End Date:</label>
+    <input type="month" id="endDate" name="endDate"><br><br>
+
+    <label for="consumption">Consumption:</label><br>
+    <textarea id="consumption" name="consumption" rows="5" cols="10"></textarea><br><br>
+
+    <label for="qualificationPercentage">Qualification Percentage:</label>
+    <input type="number" id="qualificationPercentage" name="qualificationPercentage" min="0" max="100" step="0.01"><br><br>
+
+    <button id="generateBtn" type="button" onclick="generateTable()">Generate Table</button>
+    <button id="exportBtn" type="button" onclick="exportToExcel()">Export to Excel</button>
+  </form>
+
+  <div id="tableContainer"></div>
+
+  <script>
+    function generateTable() {
+      var utility = document.getElementById("utility").value;
+      var startDate = document.getElementById("startDate").value;
+      var endDate = document.getElementById("endDate").value;
+      var consumption = document.getElementById("consumption").value.trim().split('\n').map(num => parseFloat(num.replace(/,/g, ''))); // Remove commas and convert to numbers
+      var qualificationPercentage = parseFloat(document.getElementById("qualificationPercentage").value) / 100; // Qualification percentage as a decimal
+
+      // Validation
+      if (startDate === "" || endDate === "" || consumption.length === 0 || isNaN(qualificationPercentage)) {
+        alert("Please fill in all fields.");
+        return;
+      }
+
+      // Convert start and end dates to Date objects
+      var startDateObj = new Date(startDate);
+      var endDateObj = new Date(endDate);
+
+      // Calculate number of months between start and end dates
+      var months = (endDateObj.getFullYear() - startDateObj.getFullYear()) * 12;
+      months -= startDateObj.getMonth() + 1;
+      months += endDateObj.getMonth() + 1;
+
+      // Generate table
+      var table = '<table border="1">';
+      table += '<tr><th>Date</th><th>Consumption (Kwh)</th><th>CCL Rate £/kWh</th><th>CCL Claim (£)</th></tr>';
+      var totalCCLClaim = 0;
+      for (var i = 0; i <= months; i++) {
+        var currentDate = new Date(startDateObj);
+        currentDate.setMonth(startDateObj.getMonth() + i);
+        var formattedDate = currentDate.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+        var cclRate = getCCLRate(utility, currentDate);
+        var cclClaim = (consumption[i % consumption.length] * cclRate * qualificationPercentage).toFixed(2); // Calculate CCL Claim
+        totalCCLClaim += parseFloat(cclClaim);
+        table += '<tr><td>' + formattedDate + '</td><td>' + consumption[i % consumption.length] + '</td><td>' + cclRate.toFixed(5) + '</td><td>' + cclClaim + '</td></tr>';
+      }
+      table += '<tr><td colspan="3"><b>Total CCL Claim (£)</b></td><td><b>' + totalCCLClaim.toFixed(2) + '</b></td></tr>';
+      table += '</table>';
+
+      // Display table
+      document.getElementById("tableContainer").innerHTML = table;
+    }
+
+    function getCCLRate(utility, date) {
+      var month = date.getMonth() + 1; // JavaScript months are 0-indexed
+      var year = date.getFullYear();
+      var rates = {
+        electricity: {
+          2016: 0.00559,
+          2017: 0.00568,
+          2018: 0.00583,
+          2019: 0.00847,
+          2020: 0.00811,
+          2021: 0.00775,
+          2022: 0.00775,
+          2023: 0.00775,
+          2024: 0.00775 // Update with current year's rate
+        },
+        gas: {
+          2016: 0.00195,
+          2017: 0.00198,
+          2018: 0.00203,
+          2019: 0.00339,
+          2020: 0.00406,
+          2021: 0.00465,
+          2022: 0.00568,
+          2023: 0.00672,
+          2024: 0.00672 // Update with current year's rate
+        }
+      };
+
+      if (utility === 'electricity') {
+        // Adjust year for April change
+        if (month < 4) {
+          year--;
+        }
+        return rates.electricity[year] || 0.00775; // Default to 0.00775 for future years
+      } else if (utility === 'gas') {
+        // Adjust year for April change
+        if (month < 4) {
+          year--;
+        }
+        return rates.gas[year] || 0.00672; // Default to 0.00672 for future years
+      }
+      return 0;
+    }
+
+    function exportToExcel() {
+      var table = document.getElementById("tableContainer").innerHTML;
+      var blob = new Blob([table], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=utf-8" });
+      var filename = "utility_consumption_table.xls";
+      if (navigator.msSaveBlob) {
+        // IE 10+
+        navigator.msSaveBlob(blob, filename);
+      } else {
+        // Other browsers
+        var link = document.createElement("a");
+        if (link.download !== undefined) {
+          // Browsers that support HTML5 download attribute
+          var url = URL.createObjectURL(blob);
+          link.setAttribute("href", url);
+          link.setAttribute("download", filename);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
